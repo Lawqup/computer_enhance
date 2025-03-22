@@ -7,15 +7,11 @@ const X_UB: f64 = 180.0;
 const Y_LB: f64 = -90.0;
 const Y_UB: f64 = 90.0;
 
-use profiler::Timer;
 use rand::Rng;
 
 use crate::EARTH_RADIUS;
 
 pub fn gen_input(outpath: &str, uniform: bool, samples: u64) -> io::Result<f64> {
-    println!("Generating input -- uniform: {uniform}");
-    let mut gen = Timer::new("Gen input");
-    gen.start();
 
     let outfile = std::fs::File::create(outpath)?;
     let mut writer = BufWriter::new(outfile);
@@ -75,9 +71,6 @@ pub fn gen_input(outpath: &str, uniform: bool, samples: u64) -> io::Result<f64> 
 
     writeln!(&mut writer, "    ]")?;
     writeln!(&mut writer, "}}")?;
-    
-    gen.stop();
-    gen.report_standalone();
 
     Ok(sum / samples as f64)
 }

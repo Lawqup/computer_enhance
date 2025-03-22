@@ -3,7 +3,8 @@ use std::{io, ops::Index};
 use calc::average_haversine;
 use generate::gen_input;
 use parse::JsonValue;
-use profiler::Profiler;
+use profiler::{profile_report, Profiler, Timer};
+use profiler_macro::{instr, instrument};
 
 pub mod generate;
 pub mod parse;
@@ -117,30 +118,25 @@ fn test_samples(uniform: bool, samples: u64) {
     let tmpfile = tempfile::NamedTempFile::new().unwrap();
     let path = tmpfile.path().to_str().unwrap();
 
+    println!("Generating input -- uniform: {uniform}");
     let expected = gen_input(path, uniform, samples).expect("Failed to generate input");
 
-    let mut prof = Profiler::new();
-    let startupp = prof.register("Startup");
-    startupp.borrow_mut().start();
+    println!("Finished gen input");
+    let (input_size, actual) = average_haversine(path).expect("Failed to calculate haversine");
 
-    startupp.borrow_mut().stop();
-    let (input_size, actual) = average_haversine(path, &mut prof).expect("Failed to calculate haversine");
+    instr!("Output" {
+        println!("-------------------------");
+        println!("Input size: {input_size}");
+        println!("Pair count: {samples}");
 
-    let outputp = prof.register("Output");
-    outputp.borrow_mut().start();
+        println!("Haversine avg: {actual}\n");
 
-    println!("-------------------------");
-    println!("Input size: {input_size}");
-    println!("Pair count: {samples}");
+        println!("Validation:");
+        println!("Reference avg: {expected}");
+        println!("Difference: {}\n", actual - expected);
+    });
 
-    println!("Haversine avg: {actual}\n");
-
-    println!("Validation:");
-    println!("Reference avg: {expected}");
-    println!("Difference: {}\n", actual - expected);
-
-    outputp.borrow_mut().stop();
-    prof.report();
+    profile_report();
     println!("-------------------------\n");
 
     println!();

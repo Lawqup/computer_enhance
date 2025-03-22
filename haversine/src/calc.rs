@@ -1,42 +1,35 @@
 use std::io::{self, Read};
 
-use profiler::Profiler;
+use profiler_macro::instr;
 
 use crate::{parse::JsonValue, EARTH_RADIUS};
 
-pub fn average_haversine(path: &str, prof: &mut Profiler) -> io::Result<(usize, f64)> {
-    let readp = prof.register("Read");
-    let parsep = prof.register("Parse");
-    let sump = prof.register("Sum");
+pub fn average_haversine(path: &str) -> io::Result<(usize, f64)> {
 
-    readp.borrow_mut().start();
+    let mut data;
 
-    let mut infile = std::fs::File::open(path)?;
+    instr!("Read" {
+        let mut infile = std::fs::File::open(path)?;
 
-    let mut data = String::new(); 
-    infile.read_to_string(&mut data)?;
+        data = String::new(); 
+        infile.read_to_string(&mut data)?;
+    });
 
-    readp.borrow_mut().stop();
-
-    parsep.borrow_mut().start();
     let json = JsonValue::parse(&data);
-    parsep.borrow_mut().stop();
-
-    sump.borrow_mut().start();
 
     let mut sum = 0.0;
     let pairs = json["pairs"].elements();
-    for pair in pairs {
-        let x0 = &pair["x0"];
-        let y0 = &pair["y0"];
+    instr!("Sum" {
+        for pair in pairs {
+            let x0 = &pair["x0"];
+            let y0 = &pair["y0"];
 
-        let x1 = &pair["x1"];
-        let y1 = &pair["y1"];
+            let x1 = &pair["x1"];
+            let y1 = &pair["y1"];
 
-        sum += haversine(x0.into(), y0.into(), x1.into(), y1.into());
-    }
-
-    sump.borrow_mut().stop();
+            sum += haversine(x0.into(), y0.into(), x1.into(), y1.into());
+        }
+    });
 
     Ok((data.len(), sum / pairs.len() as f64))
 }
