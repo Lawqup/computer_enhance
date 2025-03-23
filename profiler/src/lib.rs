@@ -8,7 +8,7 @@ const MAX_TIMERS: usize = 4096;
 const TOP_LEVEL: usize = 0;
 
 thread_local! {
-    pub static PROFILER: RefCell<Profiler> = RefCell::new(Profiler::new());
+    pub static PROFILER: RefCell<Profiler> = const { RefCell::new(Profiler::new()) };
 }
 
 struct TimerStack {
@@ -17,7 +17,7 @@ struct TimerStack {
 }
 
 impl TimerStack {
-    fn new() -> Self {
+    const fn new() -> Self {
         TimerStack {
             sp: 0,
             stack: [0; MAX_TIMERS],
@@ -56,7 +56,7 @@ pub fn profile_stop() {
 }
 
 pub fn clear_profiler() {
-    PROFILER.with(|p| *p.borrow_mut() = Profiler::new());
+    PROFILER.set(Profiler::new());
 }
 
 pub struct Timer {
@@ -135,7 +135,7 @@ pub struct Profiler {
 }
 
 impl Profiler {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             timers: [const { None }; MAX_TIMERS],
             timer_stack: TimerStack::new(),
