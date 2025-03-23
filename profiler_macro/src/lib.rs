@@ -5,6 +5,10 @@ use syn::{
     parse::{Parse, ParseStream},
     parse2, parse_macro_input, Block, ItemFn, LitStr,
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+// Counter for this process
+static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 struct InstrumentArgs {
     name: Option<String>,
@@ -32,23 +36,18 @@ pub fn instrument(attr: TS, item: TS) -> TS {
     let name = input_function.sig.ident;
     let arguments = input_function.sig.inputs;
     let output = input_function.sig.output;
-    let block = input_function.block;
+    let block  = input_function.block;
 
     let timer_name = args.name.unwrap_or(name.to_string());
+    let curr_index = get_and_increment_counter();
+
     quote! {
         #vis fn #name(#arguments) #output {
-            {
-                ::profiler::profiler.lock().unwrap().start(#timer_name);
+            { 
+                let handle = ::profiler::profile_start(#timer_name, #curr_index);
+
+                #block
             }
-
-            let _inner = move || { #block };
-            let ret = _inner();
-
-            {
-                ::profiler::profiler.lock().unwrap().stop(#timer_name);
-            }
-
-            ret
         }
     }
     .into()
@@ -82,17 +81,17 @@ pub fn instr(item: TS) -> TS {
 
     let block = input.block;
     let timer_name = input.args.name.unwrap_or("anonymous_block".to_string());
+    let curr_index = get_and_increment_counter();
 
     quote! {
-        {
-            ::profiler::profiler.lock().unwrap().start(#timer_name);
-        }
+        let handle = ::profiler::profile_start(#timer_name, #curr_index);
 
         #block
-
-        {
-            ::profiler::profiler.lock().unwrap().stop(#timer_name);
-        }
     }
     .into()
 }
+
+fn get_and_increment_counter() -> usize {
+    COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+

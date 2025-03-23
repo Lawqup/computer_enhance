@@ -1,46 +1,106 @@
-use std::sync::Mutex;
+use std::{cell::RefCell, usize};
 
-use lazy_static::lazy_static;
 use timings::{cpu_time, cpu_timer_freq, cpu_to_duration};
 
 mod timings;
 
-lazy_static! {
-    pub static ref profiler: Mutex<Profiler> = Mutex::new(Profiler::new());
+const MAX_TIMERS: usize = 4096;
+const TOP_LEVEL: usize = 0;
+
+thread_local! {
+    pub static PROFILER: RefCell<Profiler> = RefCell::new(Profiler::new());
+}
+
+struct TimerStack {
+    sp: usize,
+    stack: [usize; MAX_TIMERS],
+}
+
+impl TimerStack {
+    fn new() -> Self {
+        TimerStack {
+            sp: 0,
+            stack: [0; MAX_TIMERS],
+        }
+    }
+
+    fn push(&mut self, timer: usize) {
+        self.stack[self.sp] = timer;
+        self.sp += 1;
+    }
+
+    fn pop(&mut self) -> usize {
+        self.sp -= 1;
+        self.stack[self.sp]
+    }
+
+    fn peek(&self) -> usize {
+        if self.sp == 0 {
+            0
+        } else {
+            self.stack[self.sp - 1]
+        }
+    }
 }
 
 pub fn profile_report() {
-    profiler.lock().unwrap().report()
+    PROFILER.with(|p| p.borrow().report(0, TOP_LEVEL, 0, None));
+}
+
+pub fn profile_start(name: &'static str, tp: usize) -> TimerStartHandle {
+    PROFILER.with(|p| p.borrow_mut().start(name, tp))
+}
+
+pub fn profile_stop() {
+    PROFILER.with(|p| p.borrow_mut().stop());
+}
+
+pub fn clear_profiler() {
+    PROFILER.with(|p| *p.borrow_mut() = Profiler::new());
 }
 
 pub struct Timer {
     name: &'static str,
-    sum_delta: i64,
+    elapsed: i64,
+    parent: usize,
 }
 
 impl Timer {
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: &'static str, parent: usize) -> Self {
         Self {
             name,
-            sum_delta: 0,
+            elapsed: 0,
+            parent,
         }
     }
 
     pub fn start(&mut self) {
-        self.sum_delta -= cpu_time() as i64;
+        self.elapsed -= cpu_time() as i64;
     }
 
     pub fn stop(&mut self) {
-        self.sum_delta += cpu_time() as i64;
+        self.elapsed += cpu_time() as i64;
     }
 
-    pub fn report(&self, total: u64) {
+    pub fn report(&self, level: usize, total_elapsed: u64, parent_elapsed: Option<u64>) {
+        let p_parent = if let Some(parent_elapsed) = parent_elapsed {
+            format!(
+                "{:.2}% of parent, ",
+                (100 * self.elapsed) as f64 / parent_elapsed as f64
+            )
+        } else {
+            "".to_string()
+        };
+
         println!(
-            "{}: {:.4}ms {} cycles ({:.2}%)",
+            "{:indent$}{}: {:.4}ms {} cycles ({}{:.2}% of total)",
+            "",
             self.name,
-            cpu_to_duration(self.sum_delta as u64).as_secs_f64() * 1_000.0,
-            self.sum_delta,
-            (100 * self.sum_delta) as f64 / total as f64,
+            cpu_to_duration(self.elapsed as u64).as_secs_f64() * 1_000.0,
+            self.elapsed,
+            p_parent,
+            (100 * self.elapsed) as f64 / total_elapsed as f64,
+            indent = level * 4,
         );
     }
 
@@ -48,66 +108,92 @@ impl Timer {
         println!(
             "{}: {:.4}ms {} cycles",
             self.name,
-            cpu_to_duration(self.sum_delta as u64).as_secs_f64() * 1_000.0,
-            self.sum_delta,
+            cpu_to_duration(self.elapsed as u64).as_secs_f64() * 1_000.0,
+            self.elapsed,
         );
+    }
+}
+
+pub struct TimerStartHandle {
+    started: bool,
+}
+
+impl Drop for TimerStartHandle {
+    fn drop(&mut self) {
+        if self.started {
+            println!("PROF STOPPED");
+            profile_stop()
+        }
     }
 }
 
 pub struct Profiler {
-    sub_timers: [Option<Timer>; 16],
-    timers: usize,
+    timers: [Option<Timer>; MAX_TIMERS],
+    timer_stack: TimerStack,
 }
 
 impl Profiler {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
-            sub_timers: [const { None }; 16],
-            timers: 0,
-        }
-    }
-    
-    fn get_timer_mut(&mut self, name: &'static str) -> Option<&mut Timer> {
-        if let Some(sub_timer) = self.sub_timers.iter_mut().find(|t| t.as_ref().is_some_and(|t| t.name == name)) {
-            sub_timer.as_mut()
-        } else {
-            None
+            timers: [const { None }; MAX_TIMERS],
+            timer_stack: TimerStack::new(),
         }
     }
 
-    pub fn start(&mut self, name: &'static str) {
-        let sub_timer: Option<&mut Timer> = if let Some(sub_timer) = self.get_timer_mut(name) {
-            Some(sub_timer)
+    pub fn start(&mut self, name: &'static str, tp: usize) -> TimerStartHandle {
+        if self.is_recursive_call(tp) {
+            return TimerStartHandle { started: false };
+        }
+
+        if self.timers[tp].is_none() {
+            let timer = Timer::new(name, self.timer_stack.peek());
+            self.timers[tp] = Some(timer)
+        }
+
+        self.timer_stack.push(tp);
+        self.timers[tp].as_mut().unwrap().start();
+
+        TimerStartHandle { started: true }
+    }
+
+    pub fn is_recursive_call(&self, tp: usize) -> bool {
+        self.timer_stack.stack.iter().find(|t| **t == tp).is_some()
+    }
+
+    pub fn stop(&mut self) {
+        let t = self.timer_stack.pop();
+        self.timers[t].as_mut().unwrap().stop();
+    }
+
+    fn report(&self, level: usize, parent: usize, total_elapsed: u64, parent_elapsed: Option<u64>) {
+        let curr_level = self
+            .timers
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| t.as_ref().map(|t| (i, t)))
+            .filter(|(_, t)| t.parent == parent);
+
+        let mut curr_elapsed = 0;
+        for (_, timer) in curr_level.clone() {
+            curr_elapsed += timer.elapsed as u64;
+        }
+
+        let total_elapsed = if parent == 0 {
+            println!(
+                "Total time: {:.4}ms {} cycles (CPU freq {})",
+                cpu_to_duration(curr_elapsed).as_secs_f64() * 1_000.0,
+                curr_elapsed,
+                cpu_timer_freq()
+            );
+
+            curr_elapsed
         } else {
-            let sub_timer = Some(Timer::new(name));
-            self.sub_timers[self.timers] = sub_timer;
-            self.timers += 1;
-            self.sub_timers[self.timers - 1].as_mut()
+            total_elapsed
         };
 
-        sub_timer.unwrap().start()
-    }
-
-    pub fn stop(&mut self, name: &'static str) {
-        self.get_timer_mut(name).expect("Could not find sub timer").stop();
-    }
-
-    pub fn report(&self) {
-        let total = self
-            .sub_timers
-            .iter()
-            .filter_map(|t| t.as_ref().map(|t| t.sum_delta as u64))
-            .sum();
-
-        println!(
-            "Total time: {:.4}ms {} cycles (CPU freq {})",
-            cpu_to_duration(total).as_secs_f64() * 1_000.0,
-            total,
-            cpu_timer_freq()
-        );
-
-        for timer in self.sub_timers.iter().filter_map(|t| t.as_ref()) {
-            timer.report(total)
+        for (curr, timer) in curr_level {
+            timer.report(level, total_elapsed, parent_elapsed);
+            self.report(level + 1, curr, total_elapsed, Some(curr_elapsed));
         }
     }
 }

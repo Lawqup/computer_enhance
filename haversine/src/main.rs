@@ -3,12 +3,12 @@ use std::{io, ops::Index};
 use calc::average_haversine;
 use generate::gen_input;
 use parse::JsonValue;
-use profiler::{profile_report, Profiler, Timer};
+use profiler::{clear_profiler, profile_report, Profiler, Timer};
 use profiler_macro::{instr, instrument};
 
+pub mod calc;
 pub mod generate;
 pub mod parse;
-pub mod calc;
 
 pub const EARTH_RADIUS: f64 = 6372.8;
 
@@ -32,7 +32,11 @@ impl<'a> Index<&str> for JsonValue<'a> {
             panic!("Can only index with a string into a JSON object");
         };
 
-        &pairs.iter().find(|(k, _)| *k == index).expect("Key {index} not found").1
+        &pairs
+            .iter()
+            .find(|(k, _)| *k == index)
+            .expect("Key {index} not found")
+            .1
     }
 }
 
@@ -115,6 +119,8 @@ impl<'a> Into<bool> for &JsonValue<'a> {
 }
 
 fn test_samples(uniform: bool, samples: u64) {
+    clear_profiler();
+
     let tmpfile = tempfile::NamedTempFile::new().unwrap();
     let path = tmpfile.path().to_str().unwrap();
 
@@ -145,7 +151,6 @@ fn test_samples(uniform: bool, samples: u64) {
 }
 
 fn main() -> io::Result<()> {
-
     test_samples(true, 1_000_000);
     test_samples(false, 1_000_000);
     Ok(())

@@ -1,6 +1,6 @@
 use std::str;
 
-use profiler_macro::instrument;
+use profiler_macro::{instr, instrument};
 
 #[derive(Debug, PartialEq)]
 pub enum JsonValue<'a> {
@@ -100,10 +100,17 @@ impl<'a> JsonToken<'a> {
 impl<'a> JsonValue<'a> {
     #[instrument]
     pub fn parse(data: &'a str) -> Self {
-        let data = data.as_bytes();
-        Self::parse_rec(data).0
+        let bytes;
+        instr!("As bytes" {
+            bytes = data.as_bytes();
+        });
+
+        instr!("PREC" {
+            return Self::parse_rec(bytes).0;
+        });
     }
 
+    #[instrument]
     fn parse_rec(data: &'a [u8]) -> (Self, &'a[u8]) {
         let (token, ptr) = JsonToken::parse_token(data);
         let mut data = &data[ptr..];

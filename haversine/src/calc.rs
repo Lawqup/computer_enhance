@@ -1,9 +1,10 @@
 use std::io::{self, Read};
 
-use profiler_macro::instr;
+use profiler_macro::{instr, instrument};
 
 use crate::{parse::JsonValue, EARTH_RADIUS};
 
+#[instrument]
 pub fn average_haversine(path: &str) -> io::Result<(usize, f64)> {
 
     let mut data;
