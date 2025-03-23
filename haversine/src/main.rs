@@ -120,7 +120,6 @@ impl<'a> Into<bool> for &JsonValue<'a> {
 
 fn test_samples(uniform: bool, samples: u64) {
     clear_profiler();
-
     let tmpfile = tempfile::NamedTempFile::new().unwrap();
     let path = tmpfile.path().to_str().unwrap();
 
@@ -151,6 +150,8 @@ fn test_samples(uniform: bool, samples: u64) {
 }
 
 fn main() -> io::Result<()> {
+    test_samples(false, 1);
+    test_samples(false, 1000);
     test_samples(true, 1_000_000);
     test_samples(false, 1_000_000);
     Ok(())

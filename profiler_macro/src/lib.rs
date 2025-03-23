@@ -7,8 +7,7 @@ use syn::{
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-// Counter for this process
-static COUNTER: AtomicUsize = AtomicUsize::new(1);
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 struct InstrumentArgs {
     name: Option<String>,
@@ -84,9 +83,11 @@ pub fn instr(item: TS) -> TS {
     let curr_index = get_and_increment_counter();
 
     quote! {
-        let handle = ::profiler::profile_start(#timer_name, #curr_index);
+        {
+            let handle = ::profiler::profile_start(#timer_name, #curr_index);
 
-        #block
+            #block
+        }
     }
     .into()
 }

@@ -63,14 +63,16 @@ pub struct Timer {
     name: &'static str,
     elapsed: i64,
     parent: usize,
+    id: usize,
 }
 
 impl Timer {
-    pub fn new(name: &'static str, parent: usize) -> Self {
+    pub fn new(name: &'static str, parent: usize, id: usize) -> Self {
         Self {
             name,
             elapsed: 0,
             parent,
+            id,
         }
     }
 
@@ -121,7 +123,6 @@ pub struct TimerStartHandle {
 impl Drop for TimerStartHandle {
     fn drop(&mut self) {
         if self.started {
-            println!("PROF STOPPED");
             profile_stop()
         }
     }
@@ -130,6 +131,7 @@ impl Drop for TimerStartHandle {
 pub struct Profiler {
     timers: [Option<Timer>; MAX_TIMERS],
     timer_stack: TimerStack,
+    tp: usize,
 }
 
 impl Profiler {
@@ -137,27 +139,34 @@ impl Profiler {
         Self {
             timers: [const { None }; MAX_TIMERS],
             timer_stack: TimerStack::new(),
+            tp: 1,
         }
     }
 
-    pub fn start(&mut self, name: &'static str, tp: usize) -> TimerStartHandle {
-        if self.is_recursive_call(tp) {
+    pub fn start(&mut self, name: &'static str, id: usize) -> TimerStartHandle {
+        if self.is_recursive_call(id) {
             return TimerStartHandle { started: false };
         }
 
+        let tp = self.tp;
         if self.timers[tp].is_none() {
-            let timer = Timer::new(name, self.timer_stack.peek());
+            let timer = Timer::new(name, self.timer_stack.peek(), id);
             self.timers[tp] = Some(timer)
         }
 
         self.timer_stack.push(tp);
         self.timers[tp].as_mut().unwrap().start();
+        self.tp += 1;
 
         TimerStartHandle { started: true }
     }
 
-    pub fn is_recursive_call(&self, tp: usize) -> bool {
-        self.timer_stack.stack.iter().find(|t| **t == tp).is_some()
+    pub fn is_recursive_call(&self, id: usize) -> bool {
+        self.timer_stack
+            .stack
+            .iter()
+            .find(|t| self.timers[**t].as_ref().is_some_and(|t| t.id == id))
+            .is_some()
     }
 
     pub fn stop(&mut self) {
