@@ -59,6 +59,7 @@ pub fn clear_profiler() {
     PROFILER.set(Profiler::new());
 }
 
+#[derive(Debug)]
 pub struct Timer {
     name: &'static str,
     elapsed: i64,
@@ -87,22 +88,29 @@ impl Timer {
     pub fn report(&self, level: usize, total_elapsed: u64, parent_elapsed: Option<u64>) {
         let p_parent = if let Some(parent_elapsed) = parent_elapsed {
             format!(
-                "{:.2}% of parent, ",
-                (100 * self.elapsed) as f64 / parent_elapsed as f64
+                "{:05.2}% of parent, ",
+                (100 * self.elapsed) as f64 / parent_elapsed as f64,
             )
         } else {
             "".to_string()
         };
 
-        println!(
-            "{:indent$}{}: {:.4}ms {} cycles ({}{:.2}% of total)",
-            "",
-            self.name,
+        let p_vals = format!("{:.4}ms {:padding$} cycles ({}{:05.2}% of total)", 
             cpu_to_duration(self.elapsed as u64).as_secs_f64() * 1_000.0,
             self.elapsed,
             p_parent,
             (100 * self.elapsed) as f64 / total_elapsed as f64,
-            indent = level * 4,
+            padding = (total_elapsed.checked_ilog10().unwrap_or(0) + 1) as usize,
+            );
+
+        let indent = level * 4 + 4;
+        let padding = 35 - self.name.len() - indent;
+        println!(
+            "{:indent$}{}: {:padding$}{p_vals}",
+            "",
+            self.name,
+            "",
+            padding = padding,
         );
     }
 
@@ -130,16 +138,18 @@ impl Drop for TimerStartHandle {
 
 pub struct Profiler {
     timers: [Option<Timer>; MAX_TIMERS],
+    ordered: [usize; MAX_TIMERS],
+    num_timers: usize,
     timer_stack: TimerStack,
-    tp: usize,
 }
 
 impl Profiler {
     const fn new() -> Self {
         Self {
             timers: [const { None }; MAX_TIMERS],
+            ordered: [0; MAX_TIMERS],
+            num_timers: 0,
             timer_stack: TimerStack::new(),
-            tp: 1,
         }
     }
 
@@ -148,24 +158,26 @@ impl Profiler {
             return TimerStartHandle { started: false };
         }
 
-        let tp = self.tp;
-        if self.timers[tp].is_none() {
+        // println!("TP: {}", tp);
+        if self.timers[id].is_none() {
             let timer = Timer::new(name, self.timer_stack.peek(), id);
-            self.timers[tp] = Some(timer)
+            self.timers[id] = Some(timer);
+            self.ordered[self.num_timers] = id;
+            self.num_timers += 1;
         }
 
-        self.timer_stack.push(tp);
-        self.timers[tp].as_mut().unwrap().start();
-        self.tp += 1;
+        self.timer_stack.push(id);
+        self.timers[id].as_mut().unwrap().start();
 
         TimerStartHandle { started: true }
     }
 
-    pub fn is_recursive_call(&self, id: usize) -> bool {
+    fn is_recursive_call(&self, id: usize) -> bool {
         self.timer_stack
             .stack
             .iter()
-            .find(|t| self.timers[**t].as_ref().is_some_and(|t| t.id == id))
+            .take(self.timer_stack.sp)
+            .find(|i| **i == id)
             .is_some()
     }
 
@@ -173,36 +185,40 @@ impl Profiler {
         let t = self.timer_stack.pop();
         self.timers[t].as_mut().unwrap().stop();
     }
-
+    
     fn report(&self, level: usize, parent: usize, total_elapsed: u64, parent_elapsed: Option<u64>) {
         let curr_level = self
-            .timers
+            .ordered
             .iter()
-            .enumerate()
-            .filter_map(|(i, t)| t.as_ref().map(|t| (i, t)))
-            .filter(|(_, t)| t.parent == parent);
-
-        let mut curr_elapsed = 0;
-        for (_, timer) in curr_level.clone() {
-            curr_elapsed += timer.elapsed as u64;
-        }
+            .take(self.num_timers)
+            .map(|id| self.timers[*id].as_ref().unwrap())
+            .filter(|t| t.parent == parent);
+        
 
         let total_elapsed = if parent == 0 {
+            let mut top_level_elapsed = 0;
+            for timer in curr_level.clone() {
+                top_level_elapsed += timer.elapsed as u64;
+            }
+
+            let pre = "Total time";
+            let padding = 35 - pre.len();
             println!(
-                "Total time: {:.4}ms {} cycles (CPU freq {})",
-                cpu_to_duration(curr_elapsed).as_secs_f64() * 1_000.0,
-                curr_elapsed,
+                "{pre}: {:padding$}{:.4}ms {} cycles (CPU freq {})",
+                "",
+                cpu_to_duration(top_level_elapsed).as_secs_f64() * 1_000.0,
+                top_level_elapsed,
                 cpu_timer_freq()
             );
 
-            curr_elapsed
+            top_level_elapsed
         } else {
             total_elapsed
         };
 
-        for (curr, timer) in curr_level {
+        for timer in curr_level {
             timer.report(level, total_elapsed, parent_elapsed);
-            self.report(level + 1, curr, total_elapsed, Some(curr_elapsed));
+            self.report(level + 1, timer.id, total_elapsed, Some(timer.elapsed as u64));
         }
     }
 }

@@ -26,6 +26,7 @@ enum JsonToken<'a> {
 }
 
 impl<'a> JsonToken<'a> {
+    #[instrument]
     fn parse_token(data: &'a [u8]) -> (Self, usize) {
         let mut ptr = 0;
 
@@ -100,14 +101,7 @@ impl<'a> JsonToken<'a> {
 impl<'a> JsonValue<'a> {
     #[instrument]
     pub fn parse(data: &'a str) -> Self {
-        let bytes;
-        instr!("As bytes" {
-            bytes = data.as_bytes();
-        });
-
-        instr!("PREC" {
-            return Self::parse_rec(bytes).0;
-        });
+        Self::parse_rec(data.as_bytes()).0
     }
 
     #[instrument]

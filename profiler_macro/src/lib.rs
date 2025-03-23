@@ -7,7 +7,7 @@ use syn::{
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-static COUNTER: AtomicUsize = AtomicUsize::new(0);
+static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 struct InstrumentArgs {
     name: Option<String>,
