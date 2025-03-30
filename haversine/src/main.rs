@@ -3,8 +3,8 @@ use std::{io, ops::Index};
 use calc::average_haversine;
 use generate::gen_input;
 use parse::JsonValue;
-use profiler::{clear_profiler, profile_report, Profiler, ProfileNode};
-use profiler_macro::{instr, instrument};
+use profiler::{clear_profiler, profile_report};
+use profiler_macro::instr;
 
 pub mod calc;
 pub mod generate;
@@ -58,60 +58,60 @@ impl<'a> JsonValue<'a> {
     }
 }
 
-impl<'a> Into<f64> for JsonValue<'a> {
-    fn into(self) -> f64 {
-        let JsonValue::Number(number) = self else {
-            panic!("Tried to get number from {self:?}");
+impl<'a> From<JsonValue<'a>> for f64 {
+    fn from(val: JsonValue<'a>) -> Self {
+        let JsonValue::Number(number) = val else {
+            panic!("Tried to get number from {val:?}");
         };
 
         number
     }
 }
 
-impl<'a> Into<&'a str> for JsonValue<'a> {
-    fn into(self) -> &'a str {
-        let JsonValue::String(s) = self else {
-            panic!("Tried to get str from {self:?}");
+impl<'a> From<JsonValue<'a>> for &'a str {
+    fn from(val: JsonValue<'a>) -> Self {
+        let JsonValue::String(s) = val else {
+            panic!("Tried to get str from {val:?}");
         };
 
         s
     }
 }
 
-impl<'a> Into<bool> for JsonValue<'a> {
-    fn into(self) -> bool {
-        let JsonValue::Boolean(b) = self else {
-            panic!("Tried to get bool from {self:?}");
+impl<'a> From<JsonValue<'a>> for bool {
+    fn from(val: JsonValue<'a>) -> Self {
+        let JsonValue::Boolean(b) = val else {
+            panic!("Tried to get bool from {val:?}");
         };
 
         b
     }
 }
 
-impl<'a> Into<f64> for &JsonValue<'a> {
-    fn into(self) -> f64 {
-        let JsonValue::Number(number) = self else {
-            panic!("Tried to get number from {self:?}");
+impl<'a> From<&JsonValue<'a>> for f64 {
+    fn from(val: &JsonValue<'a>) -> Self {
+        let JsonValue::Number(number) = val else {
+            panic!("Tried to get number from {val:?}");
         };
 
         *number
     }
 }
 
-impl<'a> Into<&'a str> for &JsonValue<'a> {
-    fn into(self) -> &'a str {
-        let JsonValue::String(s) = self else {
-            panic!("Tried to get str from {self:?}");
+impl<'a> From<&JsonValue<'a>> for &'a str {
+    fn from(val: &JsonValue<'a>) -> Self {
+        let JsonValue::String(s) = val else {
+            panic!("Tried to get str from {val:?}");
         };
 
         s
     }
 }
 
-impl<'a> Into<bool> for &JsonValue<'a> {
-    fn into(self) -> bool {
-        let JsonValue::Boolean(b) = self else {
-            panic!("Tried to get bool from {self:?}");
+impl<'a> From<&JsonValue<'a>> for bool {
+    fn from(val: &JsonValue<'a>) -> Self {
+        let JsonValue::Boolean(b) = val else {
+            panic!("Tried to get bool from {val:?}");
         };
 
         *b

@@ -1,6 +1,6 @@
 use std::str;
 
-use profiler_macro::{instr, instrument};
+use profiler_macro::instrument;
 
 #[derive(Debug, PartialEq)]
 pub enum JsonValue<'a> {
@@ -66,7 +66,7 @@ impl<'a> JsonToken<'a> {
                 let num_str = unsafe {
                     str::from_utf8_unchecked(&data[ptr..ptr + num_size])
                 };
-                let num = num_str.parse().expect(&format!("Couldn't parse '{num_str}' as f64"));
+                let num = num_str.parse().unwrap_or_else(|_| panic!("Couldn't parse '{num_str}' as f64"));
 
                 (JsonToken::Number(num), ptr + num_size)
             }
@@ -113,7 +113,7 @@ impl<'a> JsonValue<'a> {
             JsonToken::CurlyStart => {
                 let mut pairs = Vec::new();
                 loop {
-                    let (curr, ptr) = JsonToken::parse_token(&data);
+                    let (curr, ptr) = JsonToken::parse_token(data);
                     data = &data[ptr..];
 
                     let key = match curr {
@@ -122,12 +122,12 @@ impl<'a> JsonValue<'a> {
                         _ => panic!("Found non-string object key!")
                     };
 
-                    let (curr, ptr) = JsonToken::parse_token(&data);
+                    let (curr, ptr) = JsonToken::parse_token(data);
                     data = &data[ptr..];
 
                     assert_eq!(curr, JsonToken::Colon, "Expected colon between kv pair");
                     
-                    let (val, d) = Self::parse_rec(&data);
+                    let (val, d) = Self::parse_rec(data);
                     data = d;
 
                     pairs.push((key, val));
@@ -139,13 +139,13 @@ impl<'a> JsonValue<'a> {
             JsonToken::SquareStart => {
                 let mut elements = Vec::new();
                 loop {
-                    let (curr, ptr) = JsonToken::parse_token(&data);
+                    let (curr, ptr) = JsonToken::parse_token(data);
                     if curr == JsonToken::SquareEnd {
                         data = &data[ptr..];
                         break;
                     }
 
-                    let (element, d) = Self::parse_rec(&data);
+                    let (element, d) = Self::parse_rec(data);
                     data = d;
 
                     elements.push(element);
