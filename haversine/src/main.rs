@@ -3,7 +3,7 @@ use std::{io, ops::Index};
 use calc::average_haversine;
 use generate::gen_input;
 use parse::JsonValue;
-use profiler::{clear_profiler, profile_report, Profiler, Timer};
+use profiler::{clear_profiler, profile_report, Profiler, ProfileNode};
 use profiler_macro::{instr, instrument};
 
 pub mod calc;

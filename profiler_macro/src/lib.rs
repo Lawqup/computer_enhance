@@ -43,7 +43,7 @@ pub fn instrument(attr: TS, item: TS) -> TS {
     quote! {
         #vis fn #name(#arguments) #output {
             { 
-                let handle = ::profiler::profile_start(#timer_name, #curr_index);
+                let _handle = ::profiler::ProfiledBlock::new(#timer_name, #curr_index);
 
                 #block
             }
@@ -84,7 +84,7 @@ pub fn instr(item: TS) -> TS {
 
     quote! {
         {
-            let handle = ::profiler::profile_start(#timer_name, #curr_index);
+            let _handle = ::profiler::ProfiledBlock::new(#timer_name, #curr_index);
 
             #block
         }
