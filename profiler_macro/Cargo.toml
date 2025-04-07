@@ -3,6 +3,9 @@ name = "profiler_macro"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+profile = []
+
 [lib]
 proc-macro = true
 

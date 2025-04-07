@@ -1,9 +1,10 @@
+use core::panic;
 use std::{io, ops::Index};
 
 use calc::average_haversine;
 use generate::gen_input;
 use parse::JsonValue;
-use profiler::{clear_profiler, profile_report};
+use profiler::{clear_profiler, profile_report, timings::{cpu_time, cpu_to_duration}};
 use profiler_macro::instr;
 
 pub mod calc;
@@ -150,9 +151,27 @@ fn test_samples(uniform: bool, samples: u64) {
 }
 
 fn main() -> io::Result<()> {
-    test_samples(false, 1);
-    test_samples(false, 1000);
-    test_samples(true, 1_000_000);
-    test_samples(false, 1_000_000);
+    let start = cpu_time();
+    let mut uniform = true;
+    let mut samples: Option<u64> = None;
+
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "-u" | "--uniform" => uniform = true,
+            "-c" | "--cluster" => uniform = false,
+            _ => {
+                if let Ok(n) = arg.parse() {
+                    samples = Some(n)
+                } else {
+                    panic!("Bad args");
+                }
+            }
+        }
+    }
+    let samples = samples.unwrap();
+
+    test_samples(uniform, samples);
+
+    println!("Total time elapsed: {:09.4}ms", cpu_to_duration(cpu_time() - start).as_secs_f64() * 1_000.0);
     Ok(())
 }

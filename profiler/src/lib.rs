@@ -2,7 +2,7 @@ use std::{borrow::BorrowMut, cell::RefCell, convert::identity, usize};
 
 use timings::{cpu_time, cpu_timer_freq, cpu_to_duration};
 
-mod timings;
+pub mod timings;
 
 const MAX_TIMERS: usize = 4096;
 
@@ -11,10 +11,12 @@ thread_local! {
 }
 
 pub fn profile_report() {
+    #[cfg(feature = "profile")]
     PROFILER.with(|p| p.borrow().report());
 }
 
 pub fn clear_profiler() {
+    #[cfg(feature = "profile")]
     PROFILER.set(Profiler::new());
 }
 
