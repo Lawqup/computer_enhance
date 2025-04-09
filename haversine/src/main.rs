@@ -130,7 +130,7 @@ fn test_samples(uniform: bool, samples: u64) {
     println!("Finished gen input");
     let (input_size, actual) = average_haversine(path).expect("Failed to calculate haversine");
 
-    instr!("Output" {
+    instr!("Output", {
         println!("-------------------------");
         println!("Input size: {input_size}");
         println!("Pair count: {samples}");

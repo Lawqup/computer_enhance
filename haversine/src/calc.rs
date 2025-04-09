@@ -1,5 +1,8 @@
 use std::io::{self, Read};
 
+#[cfg(feature = "profile")]
+use std::os::unix::fs::MetadataExt;
+
 use profiler_macro::{instr, instrument};
 
 use crate::{parse::JsonValue, EARTH_RADIUS};
@@ -9,9 +12,8 @@ pub fn average_haversine(path: &str) -> io::Result<(usize, f64)> {
 
     let mut data;
 
-    instr!("Read" {
-        let mut infile = std::fs::File::open(path)?;
-
+    let mut infile = std::fs::File::open(path)?;
+    instr!("Read", infile.metadata()?.size(), {
         data = String::new(); 
         infile.read_to_string(&mut data)?;
     });
@@ -20,7 +22,7 @@ pub fn average_haversine(path: &str) -> io::Result<(usize, f64)> {
 
     let mut sum = 0.0;
     let pairs = json["pairs"].elements();
-    instr!("Sum" {
+    instr!("Sum", pairs.len() * 4 * size_of::<f64>(), {
         for pair in pairs {
             let x0 = &pair["x0"];
             let y0 = &pair["y0"];

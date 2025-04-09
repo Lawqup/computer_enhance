@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 profile = []
+default = []
 
 [lib]
 proc-macro = true
@@ -13,4 +14,4 @@ proc-macro = true
 lazy_static = "1.5.0"
 proc-macro2 = "1.0.94"
 quote = "1.0.40"
-syn = { version = "2.0.100", features = ["full"] }
+syn = { version = "2.0.100", features = ["full", "derive"] }

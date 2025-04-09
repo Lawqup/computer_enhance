@@ -2,6 +2,7 @@
 
 extern crate proc_macro;
 use proc_macro::TokenStream as TS;
+use proc_macro2::Span;
 use quote::ToTokens;
 
 #[cfg(feature = "profile")]
@@ -9,7 +10,7 @@ use quote::quote;
 
 use syn::{
     parse::{Parse, ParseStream},
-    Block, LitStr,
+    Block, Expr, ExprLit, Ident, Lit, LitInt, LitStr,
 };
 
 #[cfg(feature = "profile")]
@@ -23,18 +24,55 @@ static COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 struct InstrumentArgs {
     name: Option<String>,
+    bytes_processed: Option<Expr>,
+    block: Option<Block>,
 }
 
-#[cfg(feature = "profile")]
+enum InstrumentArg {
+    Name(String),
+    BytesProcessed(Expr),
+    Block(Block),
+}
+
+impl Parse for InstrumentArg {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+
+        let res = if lookahead.peek(LitStr) {
+            let name_lit = input.parse::<LitStr>()?;
+            Self::Name(name_lit.value())
+        } else if lookahead.peek(Ident) {
+            Self::BytesProcessed(input.parse::<Expr>()?)
+        } else {
+            Self::Block(input.parse::<Block>()?)
+        };
+
+        Ok(res)
+    }
+}
+
 impl Parse for InstrumentArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.is_empty() {
-            Ok(InstrumentArgs { name: None })
-        } else {
-            let name_lit = input.parse::<LitStr>()?;
-            let name = name_lit.value();
-            Ok(InstrumentArgs { name: Some(name) })
+        let args_parsed =
+            syn::punctuated::Punctuated::<InstrumentArg, syn::Token![,]>::parse_terminated(input)
+                .unwrap();
+
+        let mut name = None;
+        let mut bytes_processed = None;
+        let mut block = None;
+        for arg in args_parsed {
+            match arg {
+                InstrumentArg::Name(n) => name = Some(n),
+                InstrumentArg::BytesProcessed(expr) => bytes_processed = Some(expr),
+                InstrumentArg::Block(b) => block = Some(b),
+            }
         }
+
+        Ok(InstrumentArgs {
+            name,
+            bytes_processed,
+            block,
+        })
     }
 }
 
@@ -57,7 +95,7 @@ pub fn instrument(attr: TS, item: TS) -> TS {
     quote! {
         #vis fn #name(#arguments) #output {
             {
-                let _handle = ::profiler::ProfiledBlock::new(#timer_name, #curr_index);
+                let _handle = ::profiler::ProfiledBlock::new(#timer_name, #curr_index, 0);
 
                 #block
             }
@@ -72,42 +110,24 @@ pub fn instrument(_attr: TS, item: TS) -> TS {
     item
 }
 
-struct ItemInstr {
-    args: InstrumentArgs,
-    block: Block,
-}
-
-impl Parse for ItemInstr {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
-        let args = if lookahead.peek(LitStr) {
-            let name_lit = input.parse::<LitStr>()?;
-            InstrumentArgs {
-                name: Some(name_lit.value()),
-            }
-        } else {
-            InstrumentArgs { name: None }
-        };
-
-        let block = input.parse::<Block>()?;
-
-        Ok(ItemInstr { args, block })
-    }
-}
-
 #[proc_macro]
 pub fn instr(item: TS) -> TS {
-    let input: ItemInstr = syn::parse2(item.into()).unwrap();
+    let input: InstrumentArgs = syn::parse2(item.into()).unwrap();
 
     let block = input.block;
     #[cfg(feature = "profile")]
     {
-        let timer_name = input.args.name.unwrap_or("anonymous_block".to_string());
+        let timer_name = input.name.unwrap_or("anonymous_block".to_string());
+        let bytes_processed = input.bytes_processed.unwrap_or(Expr::Lit(ExprLit {
+            attrs: vec![],
+            lit: Lit::Int(LitInt::new("0", Span::call_site())),
+        }));
+
         let curr_index = get_and_increment_counter();
 
         quote! {
             {
-                let _handle = ::profiler::ProfiledBlock::new(#timer_name, #curr_index);
+                let _handle = ::profiler::ProfiledBlock::new(#timer_name, #curr_index, #bytes_processed as usize);
 
                 #block
             }

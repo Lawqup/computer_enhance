@@ -1,6 +1,10 @@
 use std::{borrow::BorrowMut, cell::RefCell, convert::identity, usize};
 
-use timings::{cpu_time, cpu_timer_freq, cpu_to_duration};
+
+use timings::{cpu_time, cpu_to_duration};
+
+#[cfg(feature = "profile")]
+use timings::cpu_timer_freq;
 
 pub mod timings;
 
@@ -29,6 +33,7 @@ pub struct ProfileNode {
     name: &'static str,
     elapsed_exclusive: i64,
     elapsed_inclusive: u64,
+    bytes_processed: usize,
     calls: u64,
 }
 
@@ -38,6 +43,7 @@ impl ProfileNode {
             name,
             elapsed_exclusive: 0,
             elapsed_inclusive: 0,
+            bytes_processed: 0,
             calls: 0,
         }
     }
@@ -61,9 +67,22 @@ impl ProfileNode {
             padding = num_digits(total_elapsed),
         );
 
+        let p_data = if self.bytes_processed > 0 {
+            const MB: usize = 1024 * 1024;
+            const GB: usize = MB * 1024;
+            format!(
+                ", {:.3}mb {:.2}gb/s",
+                self.bytes_processed as f64 / MB as f64,
+                self.bytes_processed as f64 / GB as f64
+                    / cpu_to_duration(self.elapsed_inclusive).as_secs_f64()
+            )
+        } else {
+            "".to_string()
+        };
+
         let padding = 35 - self.name.len() - num_digits(self.calls);
         println!(
-            "{}[{}]: {:padding$}{p_vals}",
+            "{}[{}]: {:padding$}{p_vals}{p_data}",
             self.name,
             self.calls,
             "",
@@ -80,10 +99,10 @@ pub struct ProfiledBlock {
 }
 
 impl ProfiledBlock {
-    pub fn new(name: &'static str, id: usize) -> Self {
+    pub fn new(name: &'static str, id: usize, bytes_processed: usize) -> Self {
         PROFILER.with(|p| {
             let mut p = p.borrow_mut();
-            let parent_node_id = p.call_node(name, id);
+            let parent_node_id = p.call_node(name, id, bytes_processed);
             Self {
                 start: cpu_time(),
                 root_elapsed: p.timers[id].as_ref().unwrap().elapsed_inclusive,
@@ -133,7 +152,7 @@ impl Profiler {
         }
     }
 
-    pub fn call_node(&mut self, name: &'static str, id: usize) -> usize {
+    pub fn call_node(&mut self, name: &'static str, id: usize, bytes_processed: usize) -> usize {
         if self.timers[id].is_none() {
             if self.num_timers == 0 {
                 self.first_start = cpu_time();
@@ -145,12 +164,16 @@ impl Profiler {
             self.num_timers += 1;
         }
 
-        self.timers[id].as_mut().unwrap().calls += 1;
+        let node = self.timers[id].as_mut().unwrap();
+        node.calls += 1;
+        node.bytes_processed += bytes_processed;
+
         let prev_par = self.parent_node;
         self.parent_node = id;
         prev_par
     }
 
+    #[cfg(feature = "profile")]
     fn report(&self) {
         let total_elapsed = cpu_time() - self.first_start;
 
