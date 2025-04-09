@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, cell::RefCell, convert::identity, usize};
+use std::{cell::RefCell, usize};
 
 
 use timings::{cpu_time, cpu_to_duration};
@@ -61,7 +61,7 @@ impl ProfileNode {
 
         let p_vals = format!(
             "{:09.4}ms {:padding$} cycles ({:05.2}%){p_exclusive}",
-            cpu_to_duration(self.elapsed_inclusive as u64).as_secs_f64() * 1_000.0,
+            cpu_to_duration(self.elapsed_inclusive).as_secs_f64() * 1_000.0,
             self.elapsed_inclusive,
             (100 * self.elapsed_inclusive) as f64 / total_elapsed as f64,
             padding = num_digits(total_elapsed),

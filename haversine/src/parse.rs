@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(JsonValue::parse("12345.12345"), Number(12345.12345));
         assert_eq!(JsonValue::parse("10"), Number(10.0));
         assert_eq!(JsonValue::parse("-100"), Number(-100.0));
-        assert_eq!(JsonValue::parse("-3.1415"), Number(-3.1415));
+        assert_eq!(JsonValue::parse("-3.2415"), Number(-3.2415));
     }
 
     #[test]

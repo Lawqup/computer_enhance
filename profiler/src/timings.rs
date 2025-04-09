@@ -9,7 +9,7 @@ pub fn cpu_time() -> u64 {
         );
     }
 
-    return x;
+    x
 }
 
 pub fn cpu_timer_freq() -> u64 {
@@ -21,7 +21,7 @@ pub fn cpu_timer_freq() -> u64 {
         );
     }
 
-    return x;
+    x
 }
 
 pub fn cpu_to_duration(cpu: u64) -> Duration {
