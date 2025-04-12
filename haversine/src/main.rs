@@ -10,6 +10,7 @@ use profiler_macro::instr;
 pub mod calc;
 pub mod generate;
 pub mod parse;
+pub mod repetition_tester;
 
 pub const EARTH_RADIUS: f64 = 6372.8;
 

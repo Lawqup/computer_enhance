@@ -25,8 +25,13 @@ pub fn cpu_timer_freq() -> u64 {
 }
 
 pub fn cpu_to_duration(cpu: u64) -> Duration {
-    const SECS_TO_NANOS: u64 = 1_000_000_000;
-    Duration::from_nanos(cpu * SECS_TO_NANOS/cpu_timer_freq())
+    const SECS_TO_NANOS: u128 = 1_000_000_000;
+    Duration::from_nanos((cpu as u128 * SECS_TO_NANOS/cpu_timer_freq() as u128) as u64)
+}
+
+pub fn duration_to_cpu(dur: Duration) -> u64 {
+    const SECS_TO_NANOS: u128 = 1_000_000_000;
+    ((dur.as_nanos() * cpu_timer_freq() as u128) / SECS_TO_NANOS) as u64
 }
 
 #[cfg(test)]
