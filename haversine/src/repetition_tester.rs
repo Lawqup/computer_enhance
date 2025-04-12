@@ -115,7 +115,7 @@ impl RepetitionTester {
 
 #[cfg(test)]
 mod tests {
-    use crate::generate::gen_input;
+    use crate::{generate::gen_input, read_to_string_fast};
 
     use super::*;
 
@@ -165,21 +165,36 @@ mod tests {
     #[test]
     fn repeat_raw_read() {
         run_test(|path, tester| {
+            tester.start_trial_timer();
             let mut infile = std::fs::File::open(path).unwrap();
             let mut size_remaining = infile.metadata().unwrap().size();
             let mut data = vec![0; size_remaining as usize];
             let mut pos = 0;
 
             while size_remaining > 0 {
-                tester.start_trial_timer();
                 let n = infile.read(&mut data[pos..]).unwrap();
-                tester.end_trial_timer();
                 
                 size_remaining -= n as u64;
                 pos += n;
-                tester.count_bytes(n as u64);
             }
 
+            tester.end_trial_timer();
+
+            tester.count_bytes(pos as u64);
+
+        });
+    }
+
+    #[test]
+    fn repeat_read_fast() {
+        run_test(|path, tester| {
+            let mut infile = std::fs::File::open(path).unwrap();
+
+            tester.start_trial_timer();
+            let out = read_to_string_fast(&mut infile);
+            tester.end_trial_timer();
+
+            tester.count_bytes(out.len() as u64);
         });
     }
 }

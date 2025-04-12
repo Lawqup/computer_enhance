@@ -5,17 +5,16 @@ use std::os::unix::fs::MetadataExt;
 
 use profiler_macro::{instr, instrument};
 
-use crate::{parse::JsonValue, EARTH_RADIUS};
+use crate::{parse::JsonValue, read_to_string_fast, EARTH_RADIUS};
 
 #[instrument]
 pub fn average_haversine(path: &str) -> io::Result<(usize, f64)> {
 
-    let mut data;
+    let data;
 
     let mut infile = std::fs::File::open(path)?;
     instr!("Read", infile.metadata()?.size(), {
-        data = String::new(); 
-        infile.read_to_string(&mut data)?;
+        data = read_to_string_fast(&mut infile);
     });
 
     let json = JsonValue::parse(&data);
