@@ -147,7 +147,11 @@ pub fn test_samples(uniform: bool, samples: u64) {
 
 pub fn read_to_string_fast(f: &mut File) -> String {
     let mut size_remaining = f.metadata().unwrap().size();
-    let mut data = vec![0; size_remaining as usize];
+
+    let mut data = Vec::with_capacity(size_remaining as usize);
+    // Causes size remaining to be uninitialized
+    unsafe { data.set_len(size_remaining as usize); }
+
     let mut pos = 0;
 
     while size_remaining > 0 {
@@ -156,6 +160,8 @@ pub fn read_to_string_fast(f: &mut File) -> String {
         size_remaining -= n as u64;
         pos += n;
     }
+
+    // Size remaining is now 0, meaning all of data is initialized after this point
 
     unsafe { String::from_utf8_unchecked(data) }
 }
