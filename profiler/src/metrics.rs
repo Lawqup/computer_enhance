@@ -1,4 +1,6 @@
-use std::{arch::asm, time::Duration};
+use std::{arch::asm, mem::MaybeUninit, time::Duration};
+
+use libc::rusage;
 
 pub fn cpu_time() -> u64 {
     let mut x: u64;
@@ -22,6 +24,16 @@ pub fn cpu_timer_freq() -> u64 {
     }
 
     x
+}
+
+pub fn pagefaults() -> u64 {
+    let mut usage = MaybeUninit::uninit();
+    unsafe {
+        libc::getrusage(0, usage.as_mut_ptr());
+        let usage = usage.assume_init();
+
+        usage.ru_minflt as u64 + usage.ru_majflt as u64
+    }
 }
 
 pub fn cpu_to_duration(cpu: u64) -> Duration {

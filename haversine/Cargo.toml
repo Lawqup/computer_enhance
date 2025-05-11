@@ -11,3 +11,4 @@ rand = "0.9.0"
 tempfile = "3.18.0"
 profiler = { path = "../profiler" }
 profiler_macro = { path = "../profiler_macro" }
+libc = "0.2.172"

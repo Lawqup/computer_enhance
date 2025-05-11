@@ -1,12 +1,12 @@
 use std::{cell::RefCell, usize};
 
 
-use timings::{cpu_time, cpu_to_duration};
+use metrics::{cpu_time, cpu_to_duration};
 
 #[cfg(feature = "profile")]
-use timings::cpu_timer_freq;
+use metrics::cpu_timer_freq;
 
-pub mod timings;
+pub mod metrics;
 
 const MAX_TIMERS: usize = 4096;
 

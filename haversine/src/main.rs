@@ -1,7 +1,7 @@
 use core::panic;
 use std::io;
 
-use profiler::timings::{cpu_time, cpu_to_duration};
+use profiler::metrics::{cpu_time, cpu_to_duration};
 
 pub mod calc;
 pub mod generate;

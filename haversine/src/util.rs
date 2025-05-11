@@ -1,4 +1,5 @@
-use std::{fs::File, io::Read, ops::Index, os::unix::fs::MetadataExt};
+use core::slice;
+use std::{ffi::c_void, fs::File, io::Read, ops::{Index, IndexMut}, os::unix::fs::MetadataExt, ptr::null_mut};
 
 use crate::calc::average_haversine;
 use crate::generate::gen_input;
@@ -148,9 +149,11 @@ pub fn test_samples(uniform: bool, samples: u64) {
 pub fn read_to_string_fast(f: &mut File) -> String {
     let mut size_remaining = f.metadata().unwrap().size();
 
-    let mut data = Vec::with_capacity(size_remaining as usize);
+    let mut region = MemRegion::alloc(size_remaining as usize);
+    let data = region.as_mut_slice();
+    // let mut data = Vec::with_capacity(size_remaining as usize);
     // Causes size remaining to be uninitialized
-    unsafe { data.set_len(size_remaining as usize); }
+    // unsafe { data.set_len(size_remaining as usize); }
 
     let mut pos = 0;
 
@@ -163,5 +166,63 @@ pub fn read_to_string_fast(f: &mut File) -> String {
 
     // Size remaining is now 0, meaning all of data is initialized after this point
 
-    unsafe { String::from_utf8_unchecked(data) }
+    unsafe { String::from_utf8_unchecked(data.to_vec()) }
 }
+
+pub struct MemRegion {
+    ptr: *mut u8,
+    pub len: usize,
+}
+
+impl MemRegion {
+    pub fn alloc(len: usize) -> Self {
+        let ptr = unsafe {
+            match libc::mmap(
+                null_mut(),
+                len,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED | libc::MAP_ANONYMOUS,
+                -1,
+                0,
+            ) {
+                libc::MAP_FAILED => panic!("Failed to map memory"),
+                ptr => ptr as *mut u8,
+            }
+        };
+
+        Self { ptr, len }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe {
+            slice::from_raw_parts_mut(self.ptr, self.len)
+        }
+    }
+}
+
+impl Drop for MemRegion {
+    fn drop(&mut self) {
+        unsafe {
+            libc::munmap(self.ptr as *mut c_void, self.len);
+        }
+    }
+}
+
+impl Index<usize> for MemRegion {
+    type Output = u8;
+    fn index(&self, index: usize) -> &Self::Output {
+        unsafe {
+            self.ptr.add(index).as_ref().unwrap()
+        }
+    }
+}
+
+impl IndexMut<usize> for MemRegion {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        unsafe {
+            self.ptr.add(index).as_mut().unwrap()
+        }
+    }
+}
+
+
