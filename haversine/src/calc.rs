@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self};
 
 #[cfg(feature = "profile")]
 use std::os::unix::fs::MetadataExt;

@@ -1,7 +1,5 @@
 use std::{arch::asm, mem::MaybeUninit, time::Duration};
 
-use libc::rusage;
-
 pub fn cpu_time() -> u64 {
     let mut x: u64;
     unsafe {

@@ -1,7 +1,6 @@
-use core::slice;
-use std::{ffi::c_void, fs::File, io::Read, marker::PhantomData, ops::{Index, IndexMut}, os::unix::fs::MetadataExt, pin::pin, ptr::null_mut};
+use std::{alloc::{GlobalAlloc, Layout}, fs::File, io::Read, ops::Index, os::unix::fs::MetadataExt};
 
-use crate::calc::average_haversine;
+use crate::{allocator::ALLOCATOR, calc::average_haversine};
 use crate::generate::gen_input;
 use crate::parse::JsonValue;
 use profiler::{clear_profiler, profile_report};
@@ -146,14 +145,18 @@ pub fn test_samples(uniform: bool, samples: u64) {
     assert_eq!(expected, actual);
 }
 
-pub fn read_to_string_fast(f: &mut File) -> &str {
-    let mut size_remaining = f.metadata().unwrap().size();
+/// # Safety
+///
+/// none lmao
+pub unsafe fn uninit_vec<T>(size: usize) -> Vec<T> {
+    let ptr = ALLOCATOR.alloc(Layout::from_size_align_unchecked(size, 1));
 
-    let region = MemRegion::alloc(size_remaining as usize);
-    let data = region.to_mut_slice();
-    // let mut data = Vec::with_capacity(size_remaining as usize);
-    // Causes size remaining to be uninitialized
-    // unsafe { data.set_len(size_remaining as usize); }
+    Vec::from_raw_parts(ptr as *mut _, size, size)
+}
+
+pub fn read_to_string_fast(f: &mut File) -> String {
+    let mut size_remaining = f.metadata().unwrap().size();
+    let mut data = unsafe { uninit_vec(size_remaining as usize) };
 
     let mut pos = 0;
 
@@ -166,64 +169,6 @@ pub fn read_to_string_fast(f: &mut File) -> &str {
 
     // Size remaining is now 0, meaning all of data is initialized after this point
 
-    unsafe { str::from_utf8_unchecked(data) }
+    unsafe { String::from_utf8_unchecked(data) }
 }
-
-pub struct MemRegion<'a> {
-    ptr: *mut u8,
-    pub len: usize,
-    _boo: PhantomData<&'a mut [u8]>,
-}
-
-impl<'a> MemRegion<'a> {
-    pub fn alloc(len: usize) -> Self {
-        let ptr = unsafe {
-            match libc::mmap(
-                null_mut(),
-                len,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_SHARED | libc::MAP_ANONYMOUS,
-                -1,
-                0,
-            ) {
-                libc::MAP_FAILED => panic!("Failed to map memory"),
-                ptr => ptr as *mut u8,
-            }
-        };
-
-        Self { ptr, len, _boo: PhantomData::default() }
-    }
-
-    pub fn to_mut_slice(self) -> &'a mut [u8] {
-        unsafe {
-            slice::from_raw_parts_mut(self.ptr, self.len)
-        }
-    }
-}
-
-impl<'a> Drop for MemRegion<'a> {
-    fn drop(&mut self) {
-        // unsafe {
-        //     libc::munmap(self.ptr as *mut c_void, self.len);
-        // }
-    }
-}
-
-impl<'a> Index<usize> for MemRegion<'a> {
-    type Output = u8;
-    fn index(&self, index: usize) -> &Self::Output {
-        unsafe {
-            self.ptr.add(index).as_ref().unwrap()
-        }
-    }
-}
-
-impl<'a> IndexMut<usize> for MemRegion<'a> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe {
-            self.ptr.add(index).as_mut().unwrap()
-        }
-    }
-}
-
 

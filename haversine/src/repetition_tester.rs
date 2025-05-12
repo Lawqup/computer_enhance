@@ -1,7 +1,6 @@
 use std::{
     io::{stdout, Write},
     time::Duration,
-    u64,
 };
 
 use profiler::metrics::{cpu_time, cpu_to_duration, duration_to_cpu, pagefaults};
@@ -175,13 +174,13 @@ impl RepetitionTester {
 
 #[cfg(test)]
 mod tests {
-    use crate::{generate::gen_input, read_to_string_fast, MemRegion};
+    use crate::{generate::gen_input, read_to_string_fast, uninit_vec};
 
     use super::*;
 
     use core::slice;
     use std::{
-        ffi::c_void, io::Read, os::unix::fs::MetadataExt, path::Path, ptr::null_mut, slice::from_raw_parts, sync::Mutex
+        ffi::c_void, io::Read, os::unix::fs::MetadataExt, path::Path, ptr::null_mut, sync::Mutex
     };
     static FILE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -285,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn repeat_read_alloc_pre_alloc() {
+    fn repeat_various() {
         for _ in 0..2 {
             println!("\nRead:");
             run_test_prealloc(|path, tester, data| {
@@ -311,6 +310,7 @@ mod tests {
                 let mut infile = std::fs::File::open(path).unwrap();
 
                 let mut size_remaining = infile.metadata().unwrap().size();
+
                 let mut data = vec![0; size_remaining as usize];
                 let mut pos = 0;
 
@@ -331,8 +331,7 @@ mod tests {
                 let mut infile = std::fs::File::open(path).unwrap();
 
                 let mut size_remaining = infile.metadata().unwrap().size();
-                let region = MemRegion::alloc(size_remaining as usize);
-                let data = region.to_mut_slice();
+                let mut data = unsafe { uninit_vec(size_remaining as usize) };
                 let mut pos = 0;
 
                 while size_remaining > 0 {
@@ -352,10 +351,7 @@ mod tests {
                 let mut infile = std::fs::File::open(path).unwrap();
 
                 let mut size_remaining = infile.metadata().unwrap().size();
-
-                let region = MemRegion::alloc(size_remaining as usize);
-                let data = region.to_mut_slice();
-                // let mut data = vec![0; size_remaining as usize];
+                let mut data = unsafe { uninit_vec(size_remaining as usize) };
                 let mut pos = 0;
 
                 // Causes no faults, but doesn't improve perf on macos

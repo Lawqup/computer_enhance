@@ -8,6 +8,7 @@ pub mod generate;
 pub mod parse;
 pub mod repetition_tester;
 pub mod util;
+pub mod allocator;
 
 pub use util::*;
 
