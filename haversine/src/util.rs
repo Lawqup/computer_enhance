@@ -1,5 +1,5 @@
 use core::slice;
-use std::{ffi::c_void, fs::File, io::Read, ops::{Index, IndexMut}, os::unix::fs::MetadataExt, ptr::null_mut};
+use std::{ffi::c_void, fs::File, io::Read, marker::PhantomData, ops::{Index, IndexMut}, os::unix::fs::MetadataExt, pin::pin, ptr::null_mut};
 
 use crate::calc::average_haversine;
 use crate::generate::gen_input;
@@ -146,11 +146,11 @@ pub fn test_samples(uniform: bool, samples: u64) {
     assert_eq!(expected, actual);
 }
 
-pub fn read_to_string_fast(f: &mut File) -> String {
+pub fn read_to_string_fast(f: &mut File) -> &str {
     let mut size_remaining = f.metadata().unwrap().size();
 
-    let mut region = MemRegion::alloc(size_remaining as usize);
-    let data = region.as_mut_slice();
+    let region = MemRegion::alloc(size_remaining as usize);
+    let data = region.to_mut_slice();
     // let mut data = Vec::with_capacity(size_remaining as usize);
     // Causes size remaining to be uninitialized
     // unsafe { data.set_len(size_remaining as usize); }
@@ -166,15 +166,16 @@ pub fn read_to_string_fast(f: &mut File) -> String {
 
     // Size remaining is now 0, meaning all of data is initialized after this point
 
-    unsafe { String::from_utf8_unchecked(data.to_vec()) }
+    unsafe { str::from_utf8_unchecked(data) }
 }
 
-pub struct MemRegion {
+pub struct MemRegion<'a> {
     ptr: *mut u8,
     pub len: usize,
+    _boo: PhantomData<&'a mut [u8]>,
 }
 
-impl MemRegion {
+impl<'a> MemRegion<'a> {
     pub fn alloc(len: usize) -> Self {
         let ptr = unsafe {
             match libc::mmap(
@@ -190,25 +191,25 @@ impl MemRegion {
             }
         };
 
-        Self { ptr, len }
+        Self { ptr, len, _boo: PhantomData::default() }
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+    pub fn to_mut_slice(self) -> &'a mut [u8] {
         unsafe {
             slice::from_raw_parts_mut(self.ptr, self.len)
         }
     }
 }
 
-impl Drop for MemRegion {
+impl<'a> Drop for MemRegion<'a> {
     fn drop(&mut self) {
-        unsafe {
-            libc::munmap(self.ptr as *mut c_void, self.len);
-        }
+        // unsafe {
+        //     libc::munmap(self.ptr as *mut c_void, self.len);
+        // }
     }
 }
 
-impl Index<usize> for MemRegion {
+impl<'a> Index<usize> for MemRegion<'a> {
     type Output = u8;
     fn index(&self, index: usize) -> &Self::Output {
         unsafe {
@@ -217,7 +218,7 @@ impl Index<usize> for MemRegion {
     }
 }
 
-impl IndexMut<usize> for MemRegion {
+impl<'a> IndexMut<usize> for MemRegion<'a> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         unsafe {
             self.ptr.add(index).as_mut().unwrap()

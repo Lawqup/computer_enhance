@@ -331,8 +331,8 @@ mod tests {
                 let mut infile = std::fs::File::open(path).unwrap();
 
                 let mut size_remaining = infile.metadata().unwrap().size();
-                let mut region = MemRegion::alloc(size_remaining as usize);
-                let data = region.as_mut_slice();
+                let region = MemRegion::alloc(size_remaining as usize);
+                let data = region.to_mut_slice();
                 let mut pos = 0;
 
                 while size_remaining > 0 {
@@ -353,8 +353,8 @@ mod tests {
 
                 let mut size_remaining = infile.metadata().unwrap().size();
 
-                let mut region = MemRegion::alloc(size_remaining as usize);
-                let data = region.as_mut_slice();
+                let region = MemRegion::alloc(size_remaining as usize);
+                let data = region.to_mut_slice();
                 // let mut data = vec![0; size_remaining as usize];
                 let mut pos = 0;
 
