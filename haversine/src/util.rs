@@ -1,10 +1,20 @@
-use std::{alloc::{GlobalAlloc, Layout}, fs::File, io::Read, ops::Index, os::unix::fs::MetadataExt};
-
-use crate::{allocator::ALLOCATOR, calc::average_haversine};
+use crate::calc::average_haversine;
 use crate::generate::gen_input;
 use crate::parse::JsonValue;
 use profiler::{clear_profiler, profile_report};
 use profiler_macro::instr;
+use std::ops::Index;
+use std::usize;
+use std::{
+    fs::File,
+    io::Read,
+    os::unix::fs::MetadataExt,
+};
+
+#[cfg(feature = "mmap_alloc")]
+use crate::allocator::ALLOCATOR;
+#[cfg(feature = "mmap_alloc")]
+use std::alloc::{GlobalAlloc, Layout};
 
 pub const EARTH_RADIUS: f64 = 6372.8;
 
@@ -148,6 +158,7 @@ pub fn test_samples(uniform: bool, samples: u64) {
 /// # Safety
 ///
 /// none lmao
+#[cfg(feature = "mmap_alloc")]
 pub unsafe fn uninit_vec<T>(size: usize) -> Vec<T> {
     let ptr = ALLOCATOR.alloc(Layout::from_size_align_unchecked(size, 1));
 
@@ -156,7 +167,12 @@ pub unsafe fn uninit_vec<T>(size: usize) -> Vec<T> {
 
 pub fn read_to_string_fast(f: &mut File) -> String {
     let mut size_remaining = f.metadata().unwrap().size();
+    
+    #[cfg(feature = "mmap_alloc")]
     let mut data = unsafe { uninit_vec(size_remaining as usize) };
+
+    #[cfg(not(feature = "mmap_alloc"))]
+    let mut data = vec![0; size_remaining as usize];
 
     let mut pos = 0;
 
@@ -171,4 +187,3 @@ pub fn read_to_string_fast(f: &mut File) -> String {
 
     unsafe { String::from_utf8_unchecked(data) }
 }
-

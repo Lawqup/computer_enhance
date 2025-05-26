@@ -8,6 +8,8 @@ pub mod generate;
 pub mod parse;
 pub mod repetition_tester;
 pub mod util;
+
+#[cfg(feature = "mmap_alloc")]
 pub mod allocator;
 
 pub use util::*;

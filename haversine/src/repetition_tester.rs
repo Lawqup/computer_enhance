@@ -174,13 +174,19 @@ impl RepetitionTester {
 
 #[cfg(test)]
 mod tests {
-    use crate::{generate::gen_input, read_to_string_fast, uninit_vec};
+    use libc::VM_FLAGS_SUPERPAGE_SIZE_2MB;
+    use mach2::{traps::mach_task_self, vm_statistics::VM_FLAGS_ANYWHERE};
+
+    use crate::{generate::gen_input, read_to_string_fast};
+
+    #[cfg(feature = "mmap_alloc")]
+    use crate::util::uninit_vec;
 
     use super::*;
 
     use core::slice;
     use std::{
-        ffi::c_void, io::Read, os::unix::fs::MetadataExt, path::Path, ptr::null_mut, sync::Mutex
+        ffi::c_void, io::Read, os::unix::fs::MetadataExt, path::Path, ptr::null_mut, sync::Mutex,
     };
     static FILE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -326,57 +332,106 @@ mod tests {
                 tester.count_bytes(pos as u64);
             });
 
-            println!("\nRead + alloc (uninitialized):");
-            run_test(|path, tester| {
-                let mut infile = std::fs::File::open(path).unwrap();
+            #[cfg(feature = "mmap_alloc")]
+            {
+                println!("\nRead + alloc (uninitialized):");
+                run_test(|path, tester| {
+                    let mut infile = std::fs::File::open(path).unwrap();
 
-                let mut size_remaining = infile.metadata().unwrap().size();
-                let mut data = unsafe { uninit_vec(size_remaining as usize) };
-                let mut pos = 0;
+                    let mut size_remaining = infile.metadata().unwrap().size();
+                    let mut data = unsafe { uninit_vec(size_remaining as usize) };
+                    let mut pos = 0;
 
-                while size_remaining > 0 {
-                    tester.start_trial_timer();
-                    let n = infile.read(&mut data[pos..]).unwrap();
-                    tester.end_trial_timer();
+                    while size_remaining > 0 {
+                        tester.start_trial_timer();
+                        let n = infile.read(&mut data[pos..]).unwrap();
+                        tester.end_trial_timer();
 
-                    size_remaining -= n as u64;
-                    pos += n;
-                }
+                        size_remaining -= n as u64;
+                        pos += n;
+                    }
 
-                tester.count_bytes(pos as u64);
-            });
+                    tester.count_bytes(pos as u64);
+                });
+            }
 
-            println!("\nRead + alloc + prefetch:");
-            run_test(|path, tester| {
-                let mut infile = std::fs::File::open(path).unwrap();
+            #[cfg(feature = "mmap_alloc")]
+            {
+                println!("\nRead + alloc + prefetch:");
+                run_test(|path, tester| {
+                    let mut infile = std::fs::File::open(path).unwrap();
 
-                let mut size_remaining = infile.metadata().unwrap().size();
-                let mut data = unsafe { uninit_vec(size_remaining as usize) };
-                let mut pos = 0;
+                    let mut size_remaining = infile.metadata().unwrap().size();
+                    let mut data = unsafe { uninit_vec(size_remaining as usize) };
+                    let mut pos = 0;
 
-                // Causes no faults, but doesn't improve perf on macos
-                unsafe {
-                    libc::posix_madvise(
-                        data.as_mut_ptr() as *mut c_void,
-                        data.len(),
-                        libc::POSIX_MADV_WILLNEED
-                    );
-                };
+                    unsafe {
+                        libc::posix_madvise(
+                            data.as_mut_ptr() as *mut c_void,
+                            data.len(),
+                            libc::POSIX_MADV_WILLNEED,
+                        );
+                    };
 
-                while size_remaining > 0 {
-                    tester.start_trial_timer();
-                    let n = infile.read(&mut data[pos..]).unwrap();
-                    tester.end_trial_timer();
+                    while size_remaining > 0 {
+                        tester.start_trial_timer();
+                        let n = infile.read(&mut data[pos..]).unwrap();
+                        tester.end_trial_timer();
 
-                    size_remaining -= n as u64;
-                    pos += n;
-                }
+                        size_remaining -= n as u64;
+                        pos += n;
+                    }
 
-                tester.count_bytes(pos as u64);
-            });
+                    tester.count_bytes(pos as u64);
+                });
+            }
+
+            // Macos superpages not supported on apple silicon
+            #[cfg(none)]
+            {
+                println!("\nRead + alloc (hugepages):");
+                run_test(|path, tester| {
+                    let mut infile = std::fs::File::open(path).unwrap();
+
+                    let mut size_remaining = infile.metadata().unwrap().size();
+                    let mut data = unsafe { uninit_vec(size_remaining as usize) };
+
+                    let buf = unsafe {
+                        let addr = 0;
+                        mach2::vm::mach_vm_allocate(
+                            mach_task_self(),
+                            &addr as *const _ as *mut _,
+                            size_remaining,
+                            VM_FLAGS_ANYWHERE | VM_FLAGS_SUPERPAGE_SIZE_2MB,
+                        );
+                        slice::from_raw_parts_mut(addr as *mut u8, size_remaining as usize)
+                    };
+
+                    let mut pos = 0;
+
+                    while size_remaining > 0 {
+                        tester.start_trial_timer();
+                        let n = infile.read(&mut data[pos..]).unwrap();
+                        tester.end_trial_timer();
+
+                        size_remaining -= n as u64;
+                        pos += n;
+                    }
+
+                    tester.count_bytes(pos as u64);
+
+                    unsafe {
+                        mach2::vm::mach_vm_deallocate(
+                            mach_task_self(),
+                            buf.as_mut_ptr() as u64,
+                            buf.len() as u64,
+                        );
+                    }
+                });
+            }
         }
     }
-    
+
     #[test]
     fn probe_linear_alloc() {
         const NUM_PAGES: usize = 1024;
@@ -398,7 +453,6 @@ mod tests {
                     ptr => slice::from_raw_parts_mut(ptr as *mut _, TOTAL_SIZE),
                 }
             };
-
 
             let to_write = touched_pages * PAGE_SIZE;
 
