@@ -15,3 +15,6 @@ profiler = { path = "../profiler" }
 profiler_macro = { path = "../profiler_macro" }
 libc = "0.2.172"
 mach2 = "0.4.2"
+
+[profile.dev]
+opt-level = 1

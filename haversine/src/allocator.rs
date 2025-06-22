@@ -5,7 +5,6 @@ pub struct MmapAllocator;
 #[global_allocator]
 pub static ALLOCATOR: MmapAllocator = MmapAllocator;
 
-
 unsafe impl GlobalAlloc for MmapAllocator {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         let ptr =

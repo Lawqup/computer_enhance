@@ -6,24 +6,24 @@ use std::{
 use profiler::metrics::{cpu_time, cpu_to_duration, duration_to_cpu, pagefaults};
 
 #[derive(Default, Clone)]
-struct Metrics {
-    pagefaults: i64,
-    bytes_processed: i64,
-    time_elapsed: i64,
-    trial_count: u32,
+pub struct Metrics {
+    pub pagefaults: i64,
+    pub bytes_processed: i64,
+    pub time_elapsed: i64,
+    pub trial_count: u32,
 }
 
-struct TestResults {
-    min: Metrics,
-    max: Metrics,
-    total: Metrics,
+pub struct TestResults {
+    pub min: Metrics,
+    pub max: Metrics,
+    pub total: Metrics,
 }
 
 pub struct RepetitionTester {
     end_time: u64,
     expected_bytes_processed: u64,
     curr: Metrics,
-    results: TestResults,
+    pub results: TestResults,
     state: TesterState,
 }
 
@@ -174,9 +174,6 @@ impl RepetitionTester {
 
 #[cfg(test)]
 mod tests {
-    use libc::VM_FLAGS_SUPERPAGE_SIZE_2MB;
-    use mach2::{traps::mach_task_self, vm_statistics::VM_FLAGS_ANYWHERE};
-
     use crate::{generate::gen_input, read_to_string_fast};
 
     #[cfg(feature = "mmap_alloc")]
@@ -290,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn repeat_various() {
+    fn repeat_read_various() {
         for _ in 0..2 {
             println!("\nRead:");
             run_test_prealloc(|path, tester, data| {
@@ -387,7 +384,7 @@ mod tests {
             }
 
             // Macos superpages not supported on apple silicon
-            #[cfg(none)]
+            #[cfg(any())]
             {
                 println!("\nRead + alloc (hugepages):");
                 run_test(|path, tester| {
