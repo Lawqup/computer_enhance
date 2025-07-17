@@ -17,6 +17,9 @@ use crate::allocator::ALLOCATOR;
 use std::alloc::{GlobalAlloc, Layout};
 
 pub const EARTH_RADIUS: f64 = 6372.8;
+pub const KB: usize = 1024;
+pub const MB: usize = KB * 1024;
+pub const GB: usize = MB * 1024;
 
 impl<'a> Index<usize> for JsonValue<'a> {
     type Output = JsonValue<'a>;
