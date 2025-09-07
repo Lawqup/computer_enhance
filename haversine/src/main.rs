@@ -6,7 +6,7 @@ use profiler::metrics::{cpu_time, cpu_to_duration};
 pub mod calc;
 pub mod generate;
 pub mod parse;
-#[cfg(test)]
+// #[cfg(test)]
 pub mod cpu_profiling;
 pub mod repetition_tester;
 pub mod util;
@@ -14,7 +14,6 @@ pub mod util;
 #[cfg(feature = "mmap_alloc")]
 pub mod allocator;
 
-use repetition_tester::RepetitionTester;
 pub use util::*;
 
 fn main() -> io::Result<()> {
@@ -48,19 +47,21 @@ fn main() -> io::Result<()> {
     //
     
 
-    const TO_WRITE: u64 = 1024 * 1024;
-    let mut tester = RepetitionTester::new(Duration::from_secs(5), TO_WRITE);
-    while tester.run_new_trial() {
-        let mut data = vec![0; TO_WRITE as usize];
+    // const TO_WRITE: u64 = 1024 * 1024;
+    // let mut tester = RepetitionTester::new(Duration::from_secs(5), TO_WRITE);
+    // while tester.run_new_trial() {
+    //     let mut data = vec![0; TO_WRITE as usize];
+    //
+    //     tester.start_trial_timer();
+    //     for i in 0..data.len() {
+    //         data[i] = i
+    //     }
+    //     tester.end_trial_timer();
+    //
+    //     tester.count_bytes(data.len() as u64);
+    // };
 
-        tester.start_trial_timer();
-        for i in 0..data.len() {
-            data[i] = i
-        }
-        tester.end_trial_timer();
-
-        tester.count_bytes(data.len() as u64);
-    };
+    cpu_profiling::profile_cache_sizes();
 
     Ok(())
 }
